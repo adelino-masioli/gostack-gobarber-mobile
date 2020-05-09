@@ -5,11 +5,14 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  TextInput,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { Form } from '@unform/mobile';
 import { FormHandles } from '@unform/core';
+import * as Yup from 'yup';
 
 import {
   Container,
@@ -24,14 +27,56 @@ import Input from '../../components/Input';
 import Button from '../../components/Button';
 
 import logoImg from '../../assets/logo.png';
+import getValidationErrors from '../../utils/getValidationErrors';
+import { useAuth } from '../../hooks/auth';
+
+interface SignInFormData {
+  email: string;
+  password: string;
+}
 
 const SignIn: React.FC = () => {
   const formRef = useRef<FormHandles>(null);
+  const passwordInputRef = useRef<TextInput>(null);
   const navigation = useNavigation();
+  const { signIn } = useAuth();
 
-  const handleSignIn = useCallback((data: object) => {
-    console.log(data);
-  }, []);
+  const handleSubmitSignIn = useCallback(
+    async (data: SignInFormData) => {
+      formRef.current?.setErrors({});
+
+      try {
+        const schema = Yup.object().shape({
+          email: Yup.string()
+            .required('Email is required')
+            .email('Enter a valid email'),
+          password: Yup.string().required('Password is required'),
+        });
+        await schema.validate(data, {
+          abortEarly: false,
+        });
+
+        await signIn({
+          email: data.email,
+          password: data.password,
+        });
+      } catch (err) {
+        if (err instanceof Yup.ValidationError) {
+          const errors = getValidationErrors(err);
+          formRef.current?.setErrors(errors);
+
+          Alert.alert(
+            'Authentication error',
+            'Erro on login, check yours credentials',
+          );
+
+          return;
+        }
+      }
+    },
+    [signIn],
+  );
+
   return (
     <>
       <KeyboardAvoidingView
@@ -49,9 +94,30 @@ const SignIn: React.FC = () => {
               <Title>Sign In</Title>
             </View>
 
-            <Form ref={formRef} onSubmit={handleSignIn}>
-              <Input name="email" icon="mail" placeholder="E-mail" />
-              <Input name="password" icon="lock" placeholder="Password" />
+            <Form ref={formRef} onSubmit={handleSubmitSignIn}>
+              <Input
+                autoCorrect={false}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                returnKeyType="next"
+                onSubmitEditing={() => {
+                  passwordInputRef.current?.focus();
+                }}
+                name="email"
+                icon="mail"
+                placeholder="E-mail"
+              />
+              <Input
+                secureTextEntry
+                returnKeyType="send"
+                onSubmitEditing={() => {
+                  formRef.current?.submitForm();
+                }}
+                ref={passwordInputRef}
+                name="password"
+                icon="lock"
+                placeholder="Password"
+              />
 
               <Button
                 onPress={() => {
